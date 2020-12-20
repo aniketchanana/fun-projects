@@ -1,9 +1,12 @@
 const canvas = <HTMLCanvasElement>document.querySelector('canvas');
-
 interface SnakeBodyPart {
 	x: number,
 	y: number
 };
+interface StepsBetweenPoints {
+	steps: number,
+	updatedHead: SnakeBodyPart
+}
 
 enum SnakeBodyPartDimensions {
 	height = 20,
@@ -24,6 +27,22 @@ enum BoardDimensions {
 
 function getRandomValue(minValue: number, maxValue: number): number {
 	return Math.floor(Math.random() * (maxValue - minValue) + minValue) + 1;
+}
+
+function minOfArr(arr: Array<StepsBetweenPoints>): Array<number> {
+	let minIndex: number = 0;
+	let minIndexes: Array<number> = [];
+	arr.forEach((ele, index) => {
+		if (ele.steps < arr[minIndex].steps) {
+			minIndex = index;
+		}
+	});
+	arr.forEach((ele, index) => {
+		if (arr[minIndex].steps === ele.steps) {
+			minIndexes.push(index);
+		}
+	})
+	return minIndexes;
 }
 
 let gameTimer: number;
@@ -88,8 +107,8 @@ class Food {
 		x = x - (x % SnakeBodyPartDimensions.width);
 		y = y - (y % SnakeBodyPartDimensions.height);
 
-		console.log(x, y);
 		return { x, y };
+		// return { x: 300, y: 340 };
 	}
 }
 
@@ -214,6 +233,8 @@ class Game {
 		this.gameBoard = new Board();
 		this.snake = new Snake();
 		this.food = new Food();
+
+		this.drawBoard();
 	}
 
 	private drawBoard() {
@@ -280,8 +301,144 @@ class Game {
 			this.keyBoardControlls(keyCode);
 		});
 	}
+
+	private checkHeadCollisionWithSnakeBody(updatedHead: SnakeBodyPart) {
+		const snakeBody = this.snake.getSnakeBody();
+		for (let i = 1; i < snakeBody.length; i++) {
+			if (updatedHead.x === snakeBody[i].x && updatedHead.y === snakeBody[i].y) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private totalNumberOfSteps(pointA: SnakeBodyPart, pointB: SnakeBodyPart): StepsBetweenPoints {
+		return {
+			steps: (Math.abs(pointA.x - pointB.x) / SnakeBodyPartDimensions.width) + (Math.abs(pointA.y - pointB.y) / SnakeBodyPartDimensions.height),
+			updatedHead: pointA,
+		};
+	}
+
+	private moveUp(head: SnakeBodyPart, destination: SnakeBodyPart): StepsBetweenPoints {
+		let updatedSnakeHead: SnakeBodyPart;
+		if (head.y - SnakeBodyPartDimensions.height < 0) {
+			updatedSnakeHead = { x: head.x, y: (BoardDimensions.height - SnakeBodyPartDimensions.height) }
+		} else {
+			updatedSnakeHead = { x: head.x, y: head.y - SnakeBodyPartDimensions.height }
+		}
+		if (this.checkHeadCollisionWithSnakeBody(updatedSnakeHead)) {
+			return { steps: 100000, updatedHead: head };
+		}
+		return this.totalNumberOfSteps(updatedSnakeHead, destination);
+	}
+
+
+	private moveDown(head: SnakeBodyPart, destination: SnakeBodyPart): StepsBetweenPoints {
+		let updatedSnakeHead: SnakeBodyPart;
+		if (head.y + SnakeBodyPartDimensions.height >= BoardDimensions.height) {
+			updatedSnakeHead = { x: head.x, y: 0 }
+		} else {
+			updatedSnakeHead = { x: head.x, y: head.y + SnakeBodyPartDimensions.height }
+		}
+		if (this.checkHeadCollisionWithSnakeBody(updatedSnakeHead)) {
+			return { steps: 100000, updatedHead: head };
+		}
+		return this.totalNumberOfSteps(updatedSnakeHead, destination);
+	}
+
+	private moveLeft(head: SnakeBodyPart, destination: SnakeBodyPart): StepsBetweenPoints {
+		let updatedSnakeHead: SnakeBodyPart;
+		if (head.x - SnakeBodyPartDimensions.width < 0) {
+			updatedSnakeHead = { y: head.y, x: (BoardDimensions.width - SnakeBodyPartDimensions.width) }
+		} else {
+			updatedSnakeHead = { y: head.y, x: head.x - SnakeBodyPartDimensions.width }
+		}
+		if (this.checkHeadCollisionWithSnakeBody(updatedSnakeHead)) {
+			return { steps: 100000, updatedHead: head };
+		}
+		return this.totalNumberOfSteps(updatedSnakeHead, destination);
+	}
+
+	private moveRight(head: SnakeBodyPart, destination: SnakeBodyPart): StepsBetweenPoints {
+		let updatedSnakeHead: SnakeBodyPart;
+		if (head.x + SnakeBodyPartDimensions.width >= BoardDimensions.width) {
+			updatedSnakeHead = { y: head.y, x: 0 }
+		} else {
+			updatedSnakeHead = { y: head.y, x: head.x + SnakeBodyPartDimensions.width }
+		}
+		if (this.checkHeadCollisionWithSnakeBody(updatedSnakeHead)) {
+			return { steps: 100000, updatedHead: head };
+		}
+		return this.totalNumberOfSteps(updatedSnakeHead, destination);
+	}
+
+
+	startAutoPilotMode() {
+
+		gameTimer = window.setInterval(() => {
+			const snakeBody = this.snake.getSnakeBody();
+			const source = snakeBody[0];
+			const destination = this.food.getFoodPoints();
+
+			const stepsWhenMoveUp = this.moveUp(source, destination);
+			const stepsWhenMoveDown = this.moveDown(source, destination);
+			const stepsWhenMoveLeft = this.moveLeft(source, destination);
+			const stepsWhenMoveRight = this.moveRight(source, destination);
+
+			const minIndexes = minOfArr([stepsWhenMoveUp, stepsWhenMoveDown, stepsWhenMoveLeft, stepsWhenMoveRight]);
+
+			console.log('--------------start--------------------');
+			console.log(stepsWhenMoveUp);
+			console.log(stepsWhenMoveDown);
+			console.log(stepsWhenMoveLeft);
+			console.log(stepsWhenMoveRight);
+			console.log('--------------end--------------------');
+
+			if (minIndexes.length === 2) {
+				console.log('hit');
+			}
+			const min = minIndexes[0];
+			let direction: string = 'RIGHT';
+			if (min === 0) {
+				direction = 'UP';
+			} else if (min === 1) {
+				direction = 'DOWN';
+			} else if (min === 2) {
+				direction = 'LEFT';
+			} else if (min === 3) {
+				direction = 'RIGHT';
+			}
+
+			if (direction === 'UP') {
+				this.snake.moveSnakeOneStepInNegativeY();
+			} else if (direction === 'DOWN') {
+				this.snake.moveSnakeOneStepInPositiveY();
+			} else if (direction === 'LEFT') {
+				this.snake.moveSnakeOneStepInNegativeX();
+			} else if (direction === 'RIGHT') {
+				this.snake.moveSnakeOneStepInPositiveX();
+			}
+
+			this.gameBoard.clearBoard();
+			this.checkCollisonWithFood();
+			this.drawBoard();
+		}, 10);
+
+		// console.log(direction);
+	}
 }
+
+const urlParams = new URLSearchParams(window.location.search);
+const mode: string | null = urlParams.get('mode');
+
 
 const game = new Game();
 
-game.start();
+// if (mode === 'auto') {
+// } else {
+// 	game.start();
+// }
+game.startAutoPilotMode();
+
+// game.start();
+// game.startAutoPilotMode();
